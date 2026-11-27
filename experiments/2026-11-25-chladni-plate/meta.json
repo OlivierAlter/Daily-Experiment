@@ -1,0 +1,10 @@
+{
+  "title": "Chladni Plate",
+  "date": "2026-11-25",
+  "order": 2,
+  "medium": "Particle simulation and Web Audio",
+  "summary": "Thirty thousand grains of sand on a vibrating steel plate. Scrub the spectrum and the sand finds the figure of each resonance.",
+  "note": "A physics instrument: you hear the tone that draws the pattern.",
+  "author": "Olivier",
+  "source": "https://claude.ai/artifact/TqiD894tJR5F5stVz6Dd4s"
+}

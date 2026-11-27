@@ -1,0 +1,236 @@
+<title>Paper Canyon</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a full-bleed 3D canyon. Flight instruments sit in the top corners,
+   one card in the middle starts and ends a flight. Dawn in light theme, night in dark. */
+:root{
+  --sky:#f2cdb0; --sun:#fff3d6; --rock:#bd866a; --rock-2:#8a5746; --meadow:#86a868; --snow:#fff7ec; --water:#58aebf;
+  --ring:#f2472a; --paper:#ffffff; --ink:#2b1a16; --muted:#6b4c42; --card:#fff8f0; --line:#2b1a1626; --on-ring:#ffffff;
+  --display:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"DM Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --sky:#0c1630; --sun:#dfe6ff; --rock:#2c3b60; --rock-2:#1a2443; --meadow:#1f4b4c; --snow:#b6c6ef; --water:#11395c;
+  --ring:#ffd166; --paper:#f4f6ff; --ink:#e9edff; --muted:#a3acd0; --card:#131d3a; --line:#e9edff2e; --on-ring:#241a00; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --sky:#0c1630; --sun:#dfe6ff; --rock:#2c3b60; --rock-2:#1a2443; --meadow:#1f4b4c; --snow:#b6c6ef; --water:#11395c;
+  --ring:#ffd166; --paper:#f4f6ff; --ink:#e9edff; --muted:#a3acd0; --card:#131d3a; --line:#e9edff2e; --on-ring:#241a00; color-scheme:dark }
+
+html,body{height:100%}
+body{background:var(--sky);color:var(--ink);font-family:var(--display);font-size:16px;line-height:1.4;overflow:hidden}
+.app{position:relative;height:100%;overflow:hidden}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.gut{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.hud{position:absolute;inset:0 0 auto 0;padding-block:16px 0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;pointer-events:none}
+.hud h1{font-size:22px;font-weight:700;margin:0;letter-spacing:-.02em}
+.gauges{display:flex;gap:18px;font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.gauges div{display:flex;flex-direction:column}
+.gauges b{font-weight:500;font-size:22px;line-height:1.1}
+.gauges span{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.card{position:absolute;left:16px;right:16px;top:50%;translate:0 -50%;max-width:380px;margin-inline:auto;box-sizing:border-box;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px;display:flex;flex-direction:column;gap:12px;box-shadow:0 30px 60px -30px #000a}
+.card h2{font-size:34px;font-weight:700;line-height:1;margin:0;letter-spacing:-.03em;text-wrap:balance}
+.card p{margin:0;color:var(--muted);font-size:15.5px}
+.card .keys{font-family:var(--mono);font-size:12px;color:var(--muted)}
+button{font:700 17px var(--display);cursor:pointer;border:0;border-radius:999px;background:var(--ring);color:var(--on-ring);padding:13px 22px;align-self:flex-start}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+.tip{position:absolute;inset:auto 0 0 0;padding-block:0 18px;text-align:center;font-family:var(--mono);font-size:12px;color:var(--ink);pointer-events:none;text-shadow:0 0 8px var(--sky)}
+</style>
+
+<div class="app" id="app">
+  <canvas id="gl" aria-label="A paper plane gliding through a canyon"></canvas>
+  <div class="hud gut">
+    <h1>Paper Canyon</h1>
+    <div class="gauges">
+      <div><b id="gDist">0</b><span>metres</span></div>
+      <div><b id="gRing">0</b><span>thermals</span></div>
+      <div><b id="gBest">0</b><span>best</span></div>
+    </div>
+  </div>
+  <div class="card" id="card">
+    <h2 id="cTitle">Fold it. Throw it. Don't touch the rock.</h2>
+    <p id="cText">A paper plane only sinks. Fly through the rings of warm air to climb, dive to gain speed, and thread the canyon for as long as it holds.</p>
+    <p class="keys" id="cKeys">Steer with the pointer or a finger. Arrow keys work too.</p>
+    <button id="fly">Throw the plane</button>
+  </div>
+  <div class="tip" id="tip" hidden></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (!window.THREE){ $('cTitle').textContent = 'The canyon could not load.'; $('cText').textContent = 'This page needs its 3D library, which did not arrive. Reloading usually fixes it.'; $('fly').hidden = true; $('cKeys').hidden = true; return; }
+
+/* ---------- the canyon as a function ---------- */
+let seedZ = 0;
+function lat(x, y){ let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263); h = Math.imul(h ^ h >>> 13, 1274126177); return ((h ^ h >>> 16) >>> 0) / 4294967296; }
+function vn(x, y){ const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+  const a = lat(xi, yi), b = lat(xi + 1, yi), c = lat(xi, yi + 1), d = lat(xi + 1, yi + 1); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; }
+const fbm = (x, y) => vn(x, y) * .55 + vn(x * 2.1, y * 2.1) * .3 + vn(x * 4.3, y * 4.3) * .15;
+const cx = z => { z += seedZ; return 70 * Math.sin(z * .0045) + 45 * Math.sin(z * .0021 + 1.3); };
+const half = z => 24 + 8 * Math.sin((z + seedZ) * .007 + .5);
+const CELL = 95;
+function spire(k){ // one possible rock tooth per stretch of canyon
+  const r = lat(k, 7 + (seedZ | 0)); if (k < 4 || r < .42) return null;
+  const z = -(k + .5) * CELL; return { z, x: cx(z) + (lat(k, 11) - .5) * 1.3 * half(z), h: 26 + lat(k, 13) * 24, r: 13 };
+}
+function height(x, z){
+  const w = Math.abs(x - cx(z)), hw = half(z), wall = sstep(hw, hw + 38, w), n = fbm(x * .02, (z + seedZ) * .02);
+  let h = wall * (52 + 62 * n) + (1 - wall) * (-2.5 + 6.5 * sstep(hw * .18, hw * .7, w) + 3 * n);
+  const k = Math.floor(-z / CELL);
+  for (let q = k - 1; q <= k + 1; q++){ const s = spire(q); if (!s) continue; const d = Math.hypot(x - s.x, z - s.z); if (d < s.r) h = Math.max(h, s.h * Math.pow(1 - d / s.r, .6)); }
+  return h;
+}
+
+/* ---------- scene ---------- */
+const canvas = $('gl');
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); }
+catch (e){ $('cTitle').textContent = 'No 3D here.'; $('cText').textContent = 'This browser would not start WebGL, which the canyon is drawn with.'; $('fly').hidden = true; $('cKeys').hidden = true; return; }
+const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(62, 1, .5, 900);
+scene.fog = new THREE.Fog(0xffffff, 120, 560);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, .8), sunL = new THREE.DirectionalLight(0xffffff, .55); sunL.position.set(-.5, .8, -.4); scene.add(hemi, sunL);
+const sun = new THREE.Mesh(new THREE.SphereGeometry(26, 20, 12), new THREE.MeshBasicMaterial({ fog: false })); scene.add(sun);
+const water = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), new THREE.MeshBasicMaterial({ transparent: true, opacity: .9 })); water.rotation.x = -Math.PI / 2; water.position.y = 0; scene.add(water);
+const terrMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+
+const SX = 72, SZ = 32, DX = 8, DZ = 8, CH = SZ * DZ, NCH = 5;
+let C = {};
+function col(h, n, out, o){
+  let a, b, t;
+  if (h < 6){ a = C.meadow; b = C.meadow; t = 0; } else if (h < 16){ a = C.meadow; b = C.rock; t = (h - 6) / 10; } else if (h < 70){ a = C.rock; b = C.rock2; t = (h - 16) / 54; } else { a = C.rock2; b = C.snow; t = sstep(70, 92, h); }
+  const j = .88 + n * .24; out[o] = (a.r + (b.r - a.r) * t) * j; out[o + 1] = (a.g + (b.g - a.g) * t) * j; out[o + 2] = (a.b + (b.b - a.b) * t) * j;
+}
+function makeChunk(){
+  const g = new THREE.BufferGeometry(), nv = (SX + 1) * (SZ + 1); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(nv * 3), 3)); g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nv * 3), 3));
+  const idx = []; for (let j = 0; j < SZ; j++) for (let i = 0; i < SX; i++){ const a = j * (SX + 1) + i, b = a + 1, c = a + SX + 1, d = c + 1; idx.push(a, b, c, b, d, c); } g.setIndex(idx);
+  const m = new THREE.Mesh(g, terrMat); m.frustumCulled = false; m.userData.i = -99; scene.add(m); return m;
+}
+const chunks = Array.from({ length: NCH }, makeChunk);
+function fill(m, ci){
+  m.userData.i = ci; const p = m.geometry.attributes.position.array, c = m.geometry.attributes.color.array, z0 = -ci * CH, x0 = Math.round(cx(z0 - CH / 2) / DX) * DX - SX * DX / 2; let o = 0;
+  for (let j = 0; j <= SZ; j++) for (let i = 0; i <= SX; i++){ const x = x0 + i * DX, z = z0 - j * DZ, h = height(x, z); p[o] = x; p[o + 1] = h; p[o + 2] = z; col(h, lat(x | 0, z | 0), c, o); o += 3; }
+  m.geometry.attributes.position.needsUpdate = true; m.geometry.attributes.color.needsUpdate = true; m.geometry.computeVertexNormals();
+}
+function layChunks(force){
+  const ci = Math.floor(-P.z / CH);
+  for (let want = ci - 1; want <= ci + NCH - 2; want++){
+    if (!force && chunks.some(m => m.userData.i === want)) continue;
+    const m = force ? chunks[want - ci + 1] : chunks.find(m => m.userData.i < ci - 1 || m.userData.i > ci + NCH - 2); if (m) fill(m, want);
+  }
+}
+
+// the plane: three folds of paper
+const pg = new THREE.BufferGeometry();
+pg.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0,0,-2.2, 0,0,1.3, -1.7,.3,1.3,  0,0,-2.2, 1.7,.3,1.3, 0,0,1.3,  0,0,-2.2, 0,-.55,1.1, 0,0,1.3]), 3)); pg.computeVertexNormals();
+const plane = new THREE.Mesh(pg, new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, flatShading: true })); scene.add(plane);
+// thermals
+const ringMat = new THREE.MeshBasicMaterial({ fog: true }), rings = Array.from({ length: 6 }, () => { const m = new THREE.Mesh(new THREE.TorusGeometry(6.5, .55, 8, 28), ringMat); scene.add(m); return m; });
+let ringN = 0;
+function placeRing(m){ const k = ringN++, z = -(260 + k * 165 + lat(k, 3 + (seedZ | 0)) * 60); let x = cx(z) + (lat(k, 5) - .5) * half(z) * .9, y = 15 + lat(k, 9) * 20;
+  y = Math.max(y, height(x, z) + 12); m.position.set(x, y, z); m.userData.hit = false; m.visible = true; m.scale.setScalar(1); }
+
+function theme(){
+  const cs = getComputedStyle(document.documentElement), v = n => new THREE.Color(cs.getPropertyValue(n).trim());
+  C = { rock: v('--rock'), rock2: v('--rock-2'), meadow: v('--meadow'), snow: v('--snow') };
+  const sky = v('--sky'); scene.background = sky; scene.fog.color = sky; hemi.color = v('--sun'); hemi.groundColor = v('--rock-2'); sunL.color = v('--sun');
+  sun.material.color = v('--sun'); water.material.color = v('--water'); plane.material.color = v('--paper'); ringMat.color = v('--ring');
+  chunks.forEach(m => { if (m.userData.i > -99) fill(m, m.userData.i); });
+}
+function resize(){ const w = $('app').clientWidth, h = $('app').clientHeight; renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1)); renderer.setSize(w, h, false); cam.aspect = w / h; cam.fov = w < h ? 78 : 62; cam.updateProjectionMatrix(); }
+
+/* ---------- flight ---------- */
+const P = { x: 0, y: 24, z: 0, yaw: 0, pitch: 0, roll: 0, v: 28, lift: 0 };
+let mode = 'demo', inX = 0, inY = 0, dist = 0, got = 0, best = 0, crashT = 0;
+try { best = +localStorage.getItem('paper-canyon-best') || 0; } catch (e){}
+$('gBest').textContent = best.toLocaleString('en');
+function launch(m){
+  mode = m; seedZ = Math.floor(Math.random() * 9000); ringN = 0;
+  Object.assign(P, { x: cx(0), y: 26, z: 0, yaw: Math.atan2(cx(-60) - cx(0), 60), pitch: 0, roll: 0, v: 28, lift: 0 }); inX = inY = 0; dist = got = 0;
+  layChunks(true); rings.forEach(placeRing); camPos.set(P.x, P.y + 6, P.z + 16);
+  $('gDist').textContent = '0'; $('gRing').textContent = '0';
+}
+function autopilot(){
+  const zA = P.z - 45, k = Math.floor(-zA / CELL); let tx = cx(zA), s = spire(k) || spire(k + 1);
+  if (s && Math.abs(s.z - P.z) < 120 && Math.abs(s.x - tx) < 18) tx += s.x > tx ? -13 : 13;
+  inX = clamp((Math.atan2(tx - P.x, 45) - P.yaw) * 2.2, -1, 1);
+  inY = clamp((Math.max(22, height(P.x, P.z - 30) + 16) - P.y) * .09 - P.pitch, -1, 1);
+}
+const camPos = new THREE.Vector3(), look = new THREE.Vector3();
+function step(dt){
+  if (mode === 'demo') autopilot();
+  if (mode === 'crash'){ crashT += dt; plane.rotation.z += dt * 5; P.y = Math.max(P.y - dt * 9, height(P.x, P.z) + .3); return; }
+  const cruise = mode === 'demo' ? 26 : 28 + Math.min(14, dist / 260);
+  P.roll += (inX * .95 - P.roll) * Math.min(1, dt * 5);
+  let wantPitch = inY * .5; if (P.v < 14) wantPitch = -.45;                    // stall: the nose drops
+  P.pitch += (wantPitch - P.pitch) * Math.min(1, dt * 3.2);
+  P.yaw = clamp(P.yaw + P.roll * 1.05 * dt, -1.05, 1.05);
+  P.v = clamp(P.v + (-Math.sin(P.pitch) * 15 - (P.v - cruise) * .28) * dt, 8, 60);
+  const cp = Math.cos(P.pitch);
+  P.x += Math.sin(P.yaw) * cp * P.v * dt; P.z -= Math.cos(P.yaw) * cp * P.v * dt;
+  P.lift *= Math.exp(-dt * 1.3);
+  P.y += (Math.sin(P.pitch) * P.v - (mode === 'demo' ? 0 : 1.7) + P.lift) * dt;
+  if (P.y > 105) P.y -= (P.y - 105) * dt * 2;
+  dist = -P.z;
+  for (const m of rings){
+    if (!m.userData.hit && Math.abs(m.position.z - P.z) < 2.2 + P.v * dt && Math.hypot(m.position.x - P.x, m.position.y - P.y) < 7.4){ m.userData.hit = true; P.lift += 11; P.v += 5; if (mode === 'fly'){ got++; $('gRing').textContent = got; } }
+    if (m.userData.hit) m.scale.multiplyScalar(1 + dt * 3);
+    if (m.position.z > P.z + 22) placeRing(m);
+  }
+  if (P.y < height(P.x, P.z) + .7 || P.y < .4){
+    if (mode === 'demo'){ launch('demo'); return; }
+    mode = 'crash'; crashT = 0; const d = Math.round(dist);
+    if (d > best){ best = d; try { localStorage.setItem('paper-canyon-best', best); } catch (e){} $('gBest').textContent = best.toLocaleString('en'); }
+    $('cTitle').textContent = d.toLocaleString('en') + ' metres.'; $('cText').textContent = (got ? 'You rode ' + got + (got === 1 ? ' thermal' : ' thermals') + ' before the rock got you. ' : 'No thermals that time. The rings are what keep you up. ') + (d >= best && d > 0 ? 'That is your best flight.' : 'Your best is ' + best.toLocaleString('en') + ' m.');
+    $('fly').textContent = 'Throw another'; $('cKeys').hidden = true; $('card').hidden = false; $('tip').hidden = true; $('fly').focus({ preventScroll: true });
+  }
+  if (mode === 'fly') $('gDist').textContent = Math.round(dist).toLocaleString('en');
+  layChunks(false);
+}
+function draw(dt){
+  plane.position.set(P.x, P.y, P.z);
+  if (mode !== 'crash') plane.rotation.set(P.pitch, -P.yaw, -P.roll, 'YXZ');
+  const bx = P.x - Math.sin(P.yaw) * 15, bz = P.z + Math.cos(P.yaw) * 15, by = Math.max(P.y + 5, height(bx, bz) + 3);
+  camPos.lerp(look.set(bx, by, bz), Math.min(1, dt * 4.5)); cam.position.copy(camPos);
+  cam.lookAt(look.set(P.x + Math.sin(P.yaw) * 12, P.y + 1, P.z - Math.cos(P.yaw) * 12));
+  water.position.set(P.x, 0, P.z - 300); sun.position.set(P.x - 130, 120, P.z - 720);
+  renderer.render(scene, cam);
+}
+let last = performance.now(), frozen = false;
+function frame(now){
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (!(reduce && mode === 'demo' && frozen)){ step(dt); draw(dt); frozen = true; }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- controls ---------- */
+let touch = null; const held = {};
+canvas.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse'){ touch = { x: e.clientX, y: e.clientY, ix: inX, iy: inY }; canvas.setPointerCapture(e.pointerId); } });
+canvas.addEventListener('pointermove', e => {
+  if (mode !== 'fly') return;
+  if (e.pointerType === 'mouse'){ const r = canvas.getBoundingClientRect(); inX = clamp(((e.clientX - r.left) / r.width - .5) * 2.4, -1, 1); inY = clamp(-((e.clientY - r.top) / r.height - .5) * 2.4, -1, 1); }
+  else if (touch){ inX = clamp((e.clientX - touch.x) / 70, -1, 1); inY = clamp(-(e.clientY - touch.y) / 70, -1, 1); }
+});
+const lift = () => { if (touch){ touch = null; inX = inY = 0; } };
+canvas.addEventListener('pointerup', lift); canvas.addEventListener('pointercancel', lift);
+const KEYS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1], a: [-1, 0], d: [1, 0], w: [0, 1], s: [0, -1] };
+function keys(){ let x = 0, y = 0; for (const k in held) if (held[k]){ x += KEYS[k][0]; y += KEYS[k][1]; } inX = clamp(x, -1, 1); inY = clamp(y, -1, 1); }
+addEventListener('keydown', e => { if (KEYS[e.key] && mode === 'fly'){ held[e.key] = 1; keys(); e.preventDefault(); } });
+addEventListener('keyup', e => { if (KEYS[e.key]){ held[e.key] = 0; if (mode === 'fly') keys(); } });
+$('fly').onclick = () => {
+  launch('fly'); $('card').hidden = true; canvas.focus();
+  const tip = $('tip'); tip.textContent = matchMedia('(pointer: coarse)').matches ? 'Drag anywhere: sideways to bank, up to climb, down to dive.' : 'Pointer up to climb, down to dive. Climbing costs speed.'; tip.hidden = false; setTimeout(() => { tip.hidden = true; }, 6000);
+};
+
+theme(); resize(); launch('demo');
+new ResizeObserver(resize).observe($('app'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', theme);
+new MutationObserver(theme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+window.__canyon = { P, get mode(){ return mode; }, set input(v){ inX = v[0]; inY = v[1]; } };
+requestAnimationFrame(frame);
+})();
+</script>

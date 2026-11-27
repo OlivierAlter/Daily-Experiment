@@ -1,0 +1,484 @@
+<title>The Word Glasshouse</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Schibsted+Grotesk:wght@400;500;600&display=swap">
+<style>
+/* Layout: one full-bleed living canvas (the glasshouse bed); a quiet title top-left,
+   a planting dock bottom-centre, a specimen label card that appears on selection. */
+:root{
+  --sky-top:#bfdcdf; --sky-bot:#eef3e3; --haze:#ffffff; --soil:#33272f; --soil-2:#4a3942;
+  --ink:#17262b; --muted:#4d6268; --panel:#fbfdf8; --line:#17262b22; --mullion:#17262b1c;
+  --accent:#a02a5e; --on-accent:#ffffff; --tag:#f3ecd6; --tag-ink:#2b2320; --night:0;
+  --display:"Instrument Serif","Iowan Old Style",Georgia,serif;
+  --ui:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --sky-top:#08111c; --sky-bot:#231a33; --haze:#3a2a55; --soil:#05070b; --soil-2:#10131c;
+  --ink:#e8f1ec; --muted:#9db0b3; --panel:#121a26; --line:#e8f1ec26; --mullion:#e8f1ec14;
+  --accent:#ff86b0; --on-accent:#2a0716; --tag:#d9d2bb; --tag-ink:#1c1714; --night:1; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --sky-top:#08111c; --sky-bot:#231a33; --haze:#3a2a55; --soil:#05070b; --soil-2:#10131c;
+  --ink:#e8f1ec; --muted:#9db0b3; --panel:#121a26; --line:#e8f1ec26; --mullion:#e8f1ec14;
+  --accent:#ff86b0; --on-accent:#2a0716; --tag:#d9d2bb; --tag-ink:#1c1714; --night:1; color-scheme:dark }
+
+html,body{height:100%}
+body{background:var(--sky-bot);color:var(--ink);font-family:var(--ui);font-size:15px;line-height:1.45;overflow:hidden}
+.app{position:relative;height:100%;overflow:hidden;touch-action:none}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab}
+canvas.drag{cursor:grabbing}
+.gutter{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+.head{position:absolute;inset:0 0 auto 0;padding-block:18px 0;pointer-events:none;display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.head h1{font-family:var(--display);font-weight:400;font-size:clamp(30px,5vw,46px);line-height:1;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.head h1 em{font-style:italic}
+.head p{margin:8px 0 0;color:var(--muted);max-width:34ch}
+.count{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap;padding-top:8px}
+
+.dock{position:absolute;inset:auto 0 0 0;padding-block:0 18px;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+.dock form{pointer-events:auto;display:flex;gap:8px;width:min(100%,520px);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 6px 6px 18px;box-shadow:0 10px 30px -18px #000a}
+.dock input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:500 16px var(--ui);outline:0}
+.dock input::placeholder{color:var(--muted);font-weight:400}
+.dock form:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+button{font:600 14px var(--ui);cursor:pointer;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);padding:9px 16px}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--on-accent);border-color:transparent}
+button:disabled{opacity:.55;cursor:progress}
+.status{font-family:var(--mono);font-size:12px;color:var(--tag);min-height:1.5em;text-align:center;text-shadow:0 1px 2px #000}
+
+.pan{position:absolute;top:64%;translate:0 -50%;width:40px;height:40px;padding:0;background:var(--panel);font-size:18px;line-height:1}
+.pan.l{left:max(12px,env(safe-area-inset-left,0px))} .pan.r{right:max(12px,env(safe-area-inset-right,0px))}
+
+.card{position:absolute;top:120px;right:max(16px,env(safe-area-inset-right,0px));width:min(320px,calc(100% - 32px));background:var(--tag);color:var(--tag-ink);padding:18px 18px 14px;border-radius:3px;box-shadow:0 18px 40px -20px #000c;display:flex;flex-direction:column;gap:8px}
+.card::before{content:"";position:absolute;top:10px;left:10px;width:9px;height:9px;border-radius:50%;box-shadow:inset 0 0 0 1.5px #0005}
+.card .acc{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;padding-left:18px;opacity:.7;overflow-wrap:anywhere}
+.card h2{font-family:var(--display);font-weight:400;font-size:28px;line-height:1.05;margin:4px 0 0;text-wrap:balance;overflow-wrap:anywhere}
+.card .latin{font-family:var(--display);font-style:italic;font-size:18px;opacity:.8;overflow-wrap:anywhere}
+.card .note{font-family:var(--mono);font-size:12.5px;line-height:1.55;border-top:1px dashed #0004;padding-top:10px;overflow-wrap:anywhere}
+.card .traits{font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;opacity:.7}
+.card .row{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.card button{color:var(--tag-ink);border-color:#0003;padding:6px 12px;font-size:13px}
+.card button.danger{color:#8a1f1f}
+@media (max-width:640px){
+  .card{top:64px;left:16px;right:16px;width:auto;padding:14px 16px 12px;gap:5px}
+  .card h2{font-size:23px} .card .traits{display:none}
+  .head p{display:none}
+  .pan{top:56%}
+}
+</style>
+
+<div class="app" id="app">
+  <canvas id="cv" aria-label="A row of generated plants. Drag to walk along the bed, move the pointer to make wind, select a plant to read its label."></canvas>
+
+  <header class="head gutter">
+    <div>
+      <h1>The Word <em>Glasshouse</em></h1>
+      <p>Plant a word. Claude reads it and decides what grows.</p>
+    </div>
+    <div class="count" id="count">Opening…</div>
+  </header>
+
+  <button class="pan l" id="panL" aria-label="Walk left">‹</button>
+  <button class="pan r" id="panR" aria-label="Walk right">›</button>
+
+  <aside class="card" id="card" hidden aria-live="polite">
+    <div class="acc" id="cAcc"></div>
+    <h2 id="cCommon"></h2>
+    <div class="latin" id="cLatin"></div>
+    <div class="note" id="cNote"></div>
+    <div class="traits" id="cTraits"></div>
+    <div class="row">
+      <button id="cSpeak" hidden>Read the label aloud</button>
+      <button id="cUproot" class="danger" hidden>Uproot</button>
+      <button id="cClose">Close</button>
+    </div>
+  </aside>
+
+  <div class="dock gutter">
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+    <form id="form" autocomplete="off">
+      <input id="word" name="word" maxlength="32" placeholder="A word: nostalgia, static, Tuesday…" aria-label="Word to plant" required>
+      <button class="primary" id="plantBtn" type="submit">Plant</button>
+    </form>
+  </div>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d'), app = $('app');
+const RAD = Math.PI / 180, TAU = Math.PI * 2;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const ease = t => 1 - Math.pow(1 - t, 3);
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- genome ---------- */
+const SPEC = { depth:[3,6,1], split:[1,3,1], spread:[10,70], curl:[-30,30], decay:[.6,.85], height:[110,280],
+  jitter:[0,1], girth:[1.5,7], leafDensity:[0,1], petals:[3,12,1], bloomSize:[4,18], hue:[0,360], hue2:[0,360],
+  sat:[25,95], sway:[0,1], glow:[0,1] };
+const LEAVES = ['none','blade','round','needle','frond'];
+const BLOOMS = ['none','star','bell','orb','spike','umbel'];
+function hash(s){ let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; }
+function rng(a){ return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function str(v, max){ return (typeof v === 'string' ? v : '').replace(/\s+/g, ' ').trim().slice(0, max); }
+function clean(raw){
+  const g = {}; raw = raw && typeof raw === 'object' ? raw : {};
+  for (const k in SPEC){ const [a, b, int] = SPEC[k]; let v = Number(raw[k]); if (!isFinite(v)) v = (a + b) / 2; v = clamp(v, a, b); g[k] = int ? Math.round(v) : v; }
+  g.leaf = LEAVES.includes(raw.leaf) ? raw.leaf : 'blade';
+  g.bloom = BLOOMS.includes(raw.bloom) ? raw.bloom : 'star';
+  return g;
+}
+function fromLetters(word){
+  const r = rng(hash(word.toLowerCase())), raw = {};
+  for (const k in SPEC){ const [a, b] = SPEC[k]; raw[k] = a + r() * (b - a); }
+  raw.leaf = LEAVES[Math.floor(r() * LEAVES.length)]; raw.bloom = BLOOMS[1 + Math.floor(r() * (BLOOMS.length - 1))];
+  const A = ['Ver','Lum','Cal','Ori','Sel','Mar','Thal','Aur','Nyx','Fen','Qui','Bor'], B = ['ba','ria','lis','mea','dra','nia','phe','tora'],
+        C = ['vagans','tacita','lucida','minor','errans','nocturna','verbalis','insolita'];
+  return { g: clean(raw), latin: A[Math.floor(r()*A.length)] + B[Math.floor(r()*B.length)] + ' ' + C[Math.floor(r()*C.length)],
+    common: word.charAt(0).toUpperCase() + word.slice(1) + ['wort','bloom','reed','thistle','fern'][Math.floor(r()*5)],
+    note: 'Grown from the letters alone, without a reading from Claude.', src: 'letters' };
+}
+
+/* ---------- plant structure ---------- */
+function build(g, seed){
+  const r = rng(seed), N = []; let tips = 0;
+  const single = g.split === 1;
+  const D = single ? g.depth * 2 : g.depth, decay = single ? Math.sqrt(g.decay) : g.decay, curl = single ? g.curl / 2 : g.curl;
+  const first = g.height * (1 - decay) / (1 - Math.pow(decay, D));
+  (function grow(p, lvl, len, w){
+    if (lvl >= D){ if (p >= 0){ N[p].tip = true; tips++; } return; }
+    let n = lvl === 0 ? 1 : g.split;
+    if (n > 1 && r() < .18 * g.jitter) n--;
+    for (let i = 0; i < n; i++){
+      const off = n === 1 ? 0 : (i / (n - 1) - .5) * 2 * g.spread;
+      const ang = (off + (lvl ? curl : curl * .3) + (r() - .5) * g.jitter * 34) * RAD;
+      const l = len * (1 + (r() - .5) * .5 * g.jitter);
+      const leafRoll = r(), sideRoll = r();
+      const idx = N.push({ p, lvl, len: l, ang, w: Math.max(.6, w), ph: r() * TAU, tip: false,
+        leaf: (lvl > 0 && g.leaf !== 'none' && leafRoll < g.leafDensity) ? (sideRoll < .5 ? -1 : 1) : 0,
+        a: 0, x: 0, y: 0, s: 0 }) - 1;
+      grow(idx, lvl + 1, len * decay, w * (single ? .85 : .72));
+    }
+  })(-1, 0, first, g.girth);
+  return { N, D, tips };
+}
+
+/* ---------- state ---------- */
+let plants = [];                    // {id, word, g, latin, common, note, src, t, s(struct), grow, bend, vel}
+const known = new Map();            // id -> runtime plant (keeps structure + motion between snapshots)
+let selected = null, focusT = 0;
+let W = 0, H = 0, dpr = 1, groundY = 0, scale = 1;
+const SP = 240;
+let cam = 0, camTo = 0;
+let T = {}, night = false;
+let db = null, col = null, tts = null, sample = null, canWrite = true, ready = false;
+const dust = Array.from({ length: 46 }, (_, i) => ({ x: Math.random(), y: Math.random(), v: .2 + Math.random() * .8, ph: Math.random() * TAU, vx: 0 }));
+
+function readTheme(){
+  const cs = getComputedStyle(document.documentElement), v = n => cs.getPropertyValue(n).trim();
+  T = { top: v('--sky-top'), bot: v('--sky-bot'), haze: v('--haze'), soil: v('--soil'), soil2: v('--soil-2'), mull: v('--mullion'), tag: v('--tag'), tagInk: v('--tag-ink'), accent: v('--accent'), ink: v('--ink') };
+  night = v('--night') === '1';
+}
+readTheme();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readTheme);
+new MutationObserver(readTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+function resize(){
+  const r = app.getBoundingClientRect(); W = r.width; H = r.height; dpr = Math.min(2, devicePixelRatio || 1);
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  groundY = H - 150; scale = clamp((groundY - 120) / 300, .45, 1.35);
+}
+new ResizeObserver(resize).observe(app); resize();
+
+const px = i => i * SP;
+function setPlants(list){
+  list.sort((a, b) => a.t - b.t);
+  const now = Date.now();
+  plants = list.map(d => {
+    let p = known.get(d.id);
+    if (!p){
+      p = { ...d, s: build(d.g, hash(d.word.toLowerCase() + '|' + d.t)), grow: (!reduce && now - d.t < 25000) ? 0 : 1, bend: 0, vel: 0 };
+      known.set(d.id, p);
+    }
+    return p;
+  });
+  const ids = new Set(plants.map(p => p.id));
+  for (const k of known.keys()) if (!ids.has(k)) known.delete(k);
+  if (selected && !ids.has(selected.id)) select(null);
+  $('count').textContent = plants.length ? plants.length + (plants.length === 1 ? ' specimen' : ' specimens') : 'Empty bed';
+  if (focusT){ const i = plants.findIndex(p => p.t === focusT); if (i >= 0){ focusT = 0; camTo = px(i); select(plants[i]); } }
+  else if (!ready && plants.length){ camTo = cam = px(plants.length - 1) - Math.min(W * .2, 200); }
+  ready = true;
+}
+
+/* ---------- drawing ---------- */
+const ground = wx => groundY + Math.sin(wx * .004) * 7 + Math.sin(wx * .011 + 2) * 3;
+function hsl(h, s, l, a){ return `hsl(${h.toFixed(0)} ${s.toFixed(0)}% ${l.toFixed(0)}%${a == null ? '' : ' / ' + a})`; }
+
+function backdrop(time){
+  const sky = ctx.createLinearGradient(0, 0, 0, groundY);
+  sky.addColorStop(0, T.top); sky.addColorStop(1, T.bot);
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+  const hz = ctx.createRadialGradient(W * .5, groundY, 0, W * .5, groundY, Math.max(W, H) * .7);
+  hz.addColorStop(0, T.haze); hz.addColorStop(1, 'transparent');
+  ctx.globalAlpha = night ? .55 : .7; ctx.fillStyle = hz; ctx.fillRect(0, 0, W, groundY + 20); ctx.globalAlpha = 1;
+  // glasshouse frame: mullions and arched ribs, drifting at a slower parallax than the bed
+  ctx.strokeStyle = T.mull; ctx.lineWidth = 1.5;
+  const bay = 220, ox = -((cam * .35) % bay);
+  for (let x = ox - bay; x < W + bay; x += bay){
+    ctx.beginPath(); ctx.moveTo(x, groundY); ctx.lineTo(x, H * .16); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, H * .16); ctx.quadraticCurveTo(x + bay / 2, H * .16 - 70, x + bay, H * .16); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + bay / 2, H * .16 - 35); ctx.lineTo(x + bay / 2, groundY); ctx.globalAlpha = .5; ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  ctx.beginPath(); ctx.moveTo(0, groundY - (groundY - H * .16) * .5); ctx.lineTo(W, groundY - (groundY - H * .16) * .5); ctx.stroke();
+}
+function soil(){
+  ctx.beginPath(); ctx.moveTo(0, H);
+  for (let x = 0; x <= W + 8; x += 8) ctx.lineTo(x, ground(x + cam - W / 2));
+  ctx.lineTo(W, H); ctx.closePath();
+  const g = ctx.createLinearGradient(0, groundY - 10, 0, H); g.addColorStop(0, T.soil2); g.addColorStop(.35, T.soil);
+  ctx.fillStyle = g; ctx.fill();
+}
+function leafShape(kind, x, y, th, L){
+  if (kind === 'needle'){
+    ctx.lineWidth = 1; ctx.beginPath();
+    for (const d of [-.35, 0, .35]){ ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(th + d) * L, y + Math.sin(th + d) * L); }
+    ctx.stroke(); return;
+  }
+  const rx = kind === 'round' ? L * .36 : L * .5, ry = kind === 'round' ? L * .3 : kind === 'frond' ? L * .11 : L * .17;
+  ctx.beginPath(); ctx.ellipse(x + Math.cos(th) * rx, y + Math.sin(th) * rx, rx, ry, th, 0, TAU); ctx.fill();
+}
+function bloomShape(g, x, y, a, R, simple, cFill, cCore){
+  ctx.fillStyle = cFill; ctx.strokeStyle = cFill;
+  if (simple){ ctx.beginPath(); ctx.arc(x, y, R * .38, 0, TAU); ctx.fill(); return; }
+  const th = a - Math.PI / 2, k = g.petals;
+  switch (g.bloom){
+    case 'star':
+      for (let j = 0; j < k; j++){ const t = th + j * TAU / k; ctx.beginPath(); ctx.ellipse(x + Math.cos(t) * R * .55, y + Math.sin(t) * R * .55, R * .5, R * .19, t, 0, TAU); ctx.fill(); }
+      ctx.fillStyle = cCore; ctx.beginPath(); ctx.arc(x, y, R * .2, 0, TAU); ctx.fill(); break;
+    case 'bell':
+      ctx.beginPath(); ctx.moveTo(x - R * .6, y + R * 1.1); ctx.quadraticCurveTo(x - R * .5, y - R * .25, x, y - R * .1);
+      ctx.quadraticCurveTo(x + R * .5, y - R * .25, x + R * .6, y + R * 1.1); ctx.quadraticCurveTo(x, y + R * .75, x - R * .6, y + R * 1.1); ctx.fill();
+      ctx.fillStyle = cCore; ctx.beginPath(); ctx.arc(x, y + R * 1.05, R * .12, 0, TAU); ctx.fill(); break;
+    case 'orb':
+      ctx.globalAlpha *= .3; ctx.beginPath(); ctx.arc(x, y, R * .95, 0, TAU); ctx.fill(); ctx.globalAlpha /= .3;
+      ctx.beginPath(); ctx.arc(x, y, R * .5, 0, TAU); ctx.fill();
+      ctx.fillStyle = cCore; ctx.beginPath(); ctx.arc(x - R * .15, y - R * .15, R * .14, 0, TAU); ctx.fill(); break;
+    case 'spike':
+      for (let j = 0; j < 6; j++){ const d = j * R * .32; ctx.beginPath(); ctx.arc(x + Math.cos(th) * d, y + Math.sin(th) * d, R * (.34 - j * .045), 0, TAU); ctx.fill(); } break;
+    case 'umbel':
+      ctx.lineWidth = .8;
+      for (let j = 0; j < k; j++){ const t = th + (j / (k - 1) - .5) * 2.6, ex = x + Math.cos(t) * R, ey = y + Math.sin(t) * R;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke(); ctx.beginPath(); ctx.arc(ex, ey, R * .17, 0, TAU); ctx.fill(); } break;
+  }
+}
+function drawPlant(P, bx, by, time){
+  const g = P.g, S = P.s, N = S.N, gg = ease(P.grow) * (S.D + 1.6);
+  const sc = scale, flex = (.06 + .5 * g.sway) * .34, amb = reduce ? 0 : .028 * g.sway;
+  for (let i = 0; i < N.length; i++){
+    const n = N[i], par = n.p < 0 ? null : N[n.p];
+    let s = clamp(gg - n.lvl, 0, 1);
+    if (s <= 0 || (par && par.s <= 0)){ n.s = 0; continue; }
+    s = ease(s);
+    const a = (par ? par.a : 0) + n.ang + P.bend * flex + Math.sin(time * 1.4 + n.ph) * amb;
+    const x0 = par ? par.x : bx, y0 = par ? par.y : by;
+    n.a = a; n.s = s; n.x0 = x0; n.y0 = y0;
+    n.x = x0 + Math.sin(a) * n.len * sc * s; n.y = y0 - Math.cos(a) * n.len * sc * s;
+  }
+  ctx.lineCap = 'round';
+  const Ls = night ? 58 : 30, Ll = night ? 62 : 38, Lb = night ? 72 : 52;
+  if (night){
+    ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = hsl(g.hue, g.sat, 55, .05 + g.glow * .11);
+    for (const n of N){ if (n.s <= 0) continue; ctx.lineWidth = n.w * sc * 3.5 + 3; ctx.beginPath(); ctx.moveTo(n.x0, n.y0); ctx.lineTo(n.x, n.y); ctx.stroke(); }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  ctx.strokeStyle = hsl(g.hue, g.sat * .8, Ls);
+  for (const n of N){ if (n.s <= 0) continue; ctx.lineWidth = Math.max(.7, n.w * sc * (.5 + .5 * n.s)); ctx.beginPath(); ctx.moveTo(n.x0, n.y0); ctx.lineTo(n.x, n.y); ctx.stroke(); }
+  if (g.leaf !== 'none'){
+    ctx.fillStyle = ctx.strokeStyle = hsl(g.hue + 18, g.sat, Ll, .88);
+    for (const n of N){ if (n.s <= 0 || !n.leaf) continue;
+      const L = clamp(n.len * sc * .6, 5, 22) * n.s, th = n.a - Math.PI / 2;
+      leafShape(g.leaf, n.x, n.y, th + n.leaf * .9, L);
+      if (g.leaf === 'frond') leafShape(g.leaf, n.x, n.y, th - n.leaf * .9, L);
+    }
+  }
+  const bs = clamp(gg - S.D, 0, 1);
+  if (bs > 0 && g.bloom !== 'none'){
+    const simple = S.tips > 64, R = g.bloomSize * sc * clamp(7 / Math.sqrt(S.tips), .42, 1.25) * ease(bs);
+    const cFill = hsl(g.hue2, Math.min(100, g.sat + 12), Lb, .94), cCore = hsl(g.hue2 + 40, 90, night ? 88 : 80);
+    if (night){ ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = hsl(g.hue2, 90, 60, .035 + g.glow * .07);
+      for (const n of N){ if (n.tip && n.s > 0){ ctx.beginPath(); ctx.arc(n.x, n.y, R * 1.5, 0, TAU); ctx.fill(); } }
+      ctx.globalCompositeOperation = 'source-over'; }
+    for (const n of N) if (n.tip && n.s > 0) bloomShape(g, n.x, n.y, n.a, R, simple, cFill, cCore);
+  }
+}
+function stake(P, bx, by, sel){
+  ctx.font = '500 10.5px ' + getComputedStyle(document.documentElement).getPropertyValue('--mono');
+  const label = P.word.length > 15 ? P.word.slice(0, 14) + '…' : P.word;
+  const w = ctx.measureText(label).width + 14, y = by + 16;
+  ctx.fillStyle = T.tag; ctx.fillRect(bx - 1, by + 2, 2, 16);
+  ctx.beginPath(); ctx.roundRect(bx - w / 2, y, w, 19, 2); ctx.fill();
+  if (sel){ ctx.strokeStyle = T.accent; ctx.lineWidth = 2; ctx.stroke(); }
+  ctx.fillStyle = T.tagInk; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, bx, y + 10);
+}
+
+let last = performance.now(), gust = { x: 0, f: 0 };
+function frame(now){
+  const dt = Math.min(.05, (now - last) / 1000); last = now; const time = now / 1000;
+  cam += (camTo - cam) * (reduce ? 1 : Math.min(1, dt * 5));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  backdrop(time);
+  const off = W / 2 - cam;
+  for (let i = 0; i < plants.length; i++){
+    const P = plants[i], wx = px(i), bx = wx + off;
+    if (P.grow < 1) P.grow = Math.min(1, P.grow + dt / 5.5);
+    const push = gust.f * Math.exp(-Math.pow((wx - gust.x) / 190, 2));
+    const breeze = reduce ? 0 : Math.sin(time * .55 + wx * .008) * .9 + Math.sin(time * .23 + wx * .003) * .6;
+    P.vel += (-P.bend * 9 - P.vel * 2.4 + breeze * .9) * dt + push;
+    P.bend = clamp(P.bend + P.vel * dt, -1.6, 1.6);
+    if (bx < -260 || bx > W + 260) continue;
+    drawPlant(P, bx, ground(wx) + 2, time);
+  }
+  gust.f *= .6;
+  soil();
+  for (let i = 0; i < plants.length; i++){ const bx = px(i) + off; if (bx > -80 && bx < W + 80) stake(plants[i], bx, ground(px(i)), plants[i] === selected); }
+  // drifting pollen, pushed by the same wind
+  ctx.fillStyle = night ? 'rgba(255,240,200,.5)' : 'rgba(255,255,255,.75)';
+  for (const d of dust){
+    if (!reduce){ d.vx = d.vx * .96 + gust.f * .0009; d.x += (d.v * .006 + d.vx) * dt * 6; d.y += Math.sin(time * d.v + d.ph) * .0004; }
+    if (d.x > 1.05) d.x = -.05; if (d.x < -.05) d.x = 1.05;
+    ctx.beginPath(); ctx.arc(d.x * W, 60 + d.y * (groundY - 80), .8 + d.v, 0, TAU); ctx.fill();
+  }
+  if (ready && !plants.length){
+    ctx.fillStyle = T.ink; ctx.textAlign = 'center'; ctx.font = 'italic 24px ' + getComputedStyle(document.documentElement).getPropertyValue('--display');
+    ctx.fillText('The bed is bare. Plant the first word below.', W / 2, groundY - 60);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ---------- interaction ---------- */
+function select(P){
+  selected = P; const card = $('card');
+  if (!P){ card.hidden = true; return; }
+  $('cAcc').textContent = 'Grown from “' + P.word + '” · ' + new Date(P.t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  $('cCommon').textContent = P.common || P.word;
+  $('cLatin').textContent = P.latin || '';
+  $('cNote').textContent = P.note || '';
+  $('cTraits').textContent = (P.src === 'claude' ? 'Read by Claude' : 'Read from letters') + ' · ' + P.g.bloom + ' bloom · ' + P.g.leaf + ' leaf · ' + Math.round(P.g.height) + ' mm';
+  $('cSpeak').hidden = !tts; $('cUproot').hidden = !canWrite; $('cUproot').textContent = 'Uproot'; armed = false;
+  card.hidden = false;
+}
+let armed = false;
+$('cClose').onclick = () => select(null);
+$('cUproot').onclick = async () => {
+  if (!selected) return;
+  if (!armed){ armed = true; $('cUproot').textContent = 'Uproot for good?'; return; }
+  const P = selected; select(null);
+  if (col){ try { await db.doc('plants/' + P.id).delete(); } catch (e){ say('Could not uproot that one.'); } }
+  else setPlants(plants.filter(p => p !== P).map(p => p));
+};
+$('cSpeak').onclick = () => { if (tts && selected) tts.speak([selected.common, selected.latin, selected.note].filter(Boolean).join('. ')).catch(() => {}); };
+
+let drag = null;
+cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, cam: camTo, moved: 0, lx: e.clientX }; cv.setPointerCapture(e.pointerId); cv.classList.add('drag'); });
+cv.addEventListener('pointermove', e => {
+  const r = cv.getBoundingClientRect(), wx = e.clientX - r.left - W / 2 + cam;
+  if (drag){ const dx = e.clientX - drag.x; drag.moved = Math.max(drag.moved, Math.abs(dx)); camTo = cam = clampCam(drag.cam - dx); }
+  else { gust.x = wx; gust.f = clamp(gust.f + e.movementX * .012, -1.4, 1.4); }
+});
+cv.addEventListener('pointerup', e => {
+  cv.classList.remove('drag'); const d = drag; drag = null; if (!d || d.moved > 6) return;
+  const r = cv.getBoundingClientRect(), wx = e.clientX - r.left - W / 2 + cam;
+  const i = Math.round(wx / SP);
+  if (plants[i] && Math.abs(wx - px(i)) < 70){ camTo = clampCam(px(i)); select(plants[i]); } else select(null);
+});
+cv.addEventListener('pointercancel', () => { drag = null; cv.classList.remove('drag'); });
+cv.addEventListener('wheel', e => { e.preventDefault(); camTo = clampCam(camTo + (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY)); }, { passive: false });
+const clampCam = v => clamp(v, -120, Math.max(0, px(plants.length - 1)) + 120);
+$('panL').onclick = () => { camTo = clampCam(camTo - SP * 2); };
+$('panR').onclick = () => { camTo = clampCam(camTo + SP * 2); };
+addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') return; if (e.key === 'ArrowLeft') camTo = clampCam(camTo - SP); if (e.key === 'ArrowRight') camTo = clampCam(camTo + SP); if (e.key === 'Escape') select(null); });
+
+let sayTimer; const say = (m, keep) => { $('status').textContent = m; clearTimeout(sayTimer); if (!keep) sayTimer = setTimeout(() => { $('status').textContent = ''; }, 6000); };
+
+/* ---------- planting ---------- */
+function prompt(word){
+  return `You are the botanist of a glasshouse where words grow into plants. Design the plant that grows from the word below. Let the word's meaning, mood and sound decide every trait, so that contrasting words give visibly different plants. Use the full range of each trait.
+
+Word: ${JSON.stringify(word)}
+
+Reply with one JSON object only, with exactly these keys:
+"depth": integer 3-6, levels of branching
+"split": integer 1-3, branches per fork (1 = a single stalk like a reed or fern crozier, 3 = bushy)
+"spread": 10-70, fork angle in degrees
+"curl": -30 to 30, lean added at every level (strong values spiral)
+"decay": 0.6-0.85, how fast branches shorten
+"height": 110-280
+"jitter": 0-1 (0 = geometric and calm, 1 = wild and irregular)
+"girth": 1.5-7, stem thickness
+"leaf": one of "none","blade","round","needle","frond"
+"leafDensity": 0-1
+"bloom": one of "none","star","bell","orb","spike","umbel"
+"petals": integer 3-12
+"bloomSize": 4-18
+"hue": 0-360, stem and leaf colour
+"hue2": 0-360, bloom colour
+"sat": 25-95, saturation
+"sway": 0-1 (0 = stiff, 1 = supple in wind)
+"glow": 0-1, how strongly it glows at night
+"latin": an invented two-word botanical Latin name
+"common": an invented common name, at most 4 words
+"note": one field-note sentence, at most 150 characters, saying how the word shaped the plant. Write it in the language of the word.`;
+}
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const word = str($('word').value, 32); if (!word) return;
+  const btn = $('plantBtn'); btn.disabled = true;
+  let spec = null;
+  if (sample){
+    say('Claude is reading “' + word + '”…', true);
+    try {
+      const raw = await sample.json(prompt(word), { modelTier: 'default' });
+      spec = { g: clean(raw), latin: str(raw && raw.latin, 60), common: str(raw && raw.common, 60), note: str(raw && raw.note, 220), src: 'claude' };
+    } catch (err){ if (err && err.code === 'not_granted') sample = null; }
+  }
+  if (!spec) spec = fromLetters(word);
+  const rec = { word, g: spec.g, latin: spec.latin, common: spec.common, note: spec.note, src: spec.src, t: Date.now() };
+  focusT = rec.t;
+  let saved = false;
+  if (col && canWrite){ try { await col.add(rec); saved = true; } catch (err){ if (err && err.code === 'permission_denied') canWrite = false; } }
+  if (!saved){ setPlants(plants.map(p => p).concat([{ id: 'local-' + rec.t, ...rec }])); }
+  say(spec.src === 'claude' ? (saved ? 'Planted. Watch it grow.' : 'Planted here only. It could not be saved to the shared bed.') : (sample === null && !saved ? 'Planted from the letters. This bed is not saved.' : 'Claude could not be reached, so it grew from the letters alone.'));
+  $('word').value = ''; btn.disabled = false;
+});
+
+/* ---------- capabilities ---------- */
+const use = n => (window.claude && window.claude.use) ? window.claude.use(n).catch(() => null) : Promise.resolve(null);
+function parseDoc(d){
+  const v = d.data() || {}; const word = str(v.word, 32), t = Number(v.t);
+  if (!word || !isFinite(t)) return null;
+  return { id: d.id, word, t, g: clean(v.g), latin: str(v.latin, 60), common: str(v.common, 60), note: str(v.note, 220), src: v.src === 'claude' ? 'claude' : 'letters' };
+}
+function localBed(msg){
+  if (ready) return;
+  const t0 = Date.now() - 6e7;
+  setPlants(['dawn', 'static', 'lullaby', 'thorn', 'wander'].map((w, i) => ({ id: 'local-' + i, word: w, t: t0 + i * 1000, ...fromLetters(w) })));
+  say(msg, true);
+}
+(async () => {
+  use('sample').then(s => { sample = s; });
+  use('tts').then(t => { tts = t; if (selected) $('cSpeak').hidden = !tts; });
+  use('user').then(async u => { try { const c = u && await u.can('data.write'); if (c === false){ canWrite = false; $('form').hidden = true; say('You can look around this bed, but only contributors can plant in it.', true); } } catch (e){} });
+  db = await use('db');
+  if (!db){ localBed('Example bed, grown from letters. Nothing here is saved.'); return; }
+  col = db.collection('plants');
+  const timer = setTimeout(() => localBed('The shared bed did not load, so this is an example bed that is not saved.'), 10000);
+  col.orderBy('t', 'desc').limit(90).onSnapshot(snap => {
+    clearTimeout(timer);
+    if (plants.some(p => String(p.id).startsWith('local-')) && !snap.docs.length) return;
+    if (!ready) say('');
+    setPlants(snap.docs.map(parseDoc).filter(Boolean));
+  }, () => { clearTimeout(timer); localBed('The shared bed did not load, so this is an example bed that is not saved.'); });
+})();
+})();
+</script>

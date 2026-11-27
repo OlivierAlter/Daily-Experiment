@@ -1,0 +1,10 @@
+{
+  "title": "Paper Canyon",
+  "date": "2026-11-26",
+  "order": 1,
+  "medium": "WebGL with three.js",
+  "summary": "A paper glider in an endless generated canyon. Dive for speed, spend it to climb, thread the thermal rings.",
+  "note": "The first game and the first piece in 3D. It flies itself until you take over.",
+  "author": "Olivier",
+  "source": "https://claude.ai/artifact/GoPmXKUExhryXtbp3h12tx"
+}

@@ -1,0 +1,245 @@
+<title>Chladni Plate</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500&family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;1,6..96,500&family=Hanken+Grotesk:wght@400;500;600&display=swap">
+<style>
+/* Layout: the plate is the page. A square steel plate left, an instrument column right
+   (frequency readout, response spectrum you can scrub, a few controls). Stacks on phones. */
+:root{
+  --bg:#e6eaee; --panel:#f4f6f8; --ink:#12171d; --muted:#56616d; --line:#12171d24;
+  --brass:#8a5c0c; --on-brass:#fffaf0; --plate:#1a2028; --plate-2:#0d1116; --sand:#f3deaa; --peak:#12171d;
+  --display:"Bodoni Moda","Didot","Bodoni MT",Georgia,serif;
+  --ui:"Hanken Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Azeret Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0b0e12; --panel:#141920; --ink:#ece6d8; --muted:#9aa3ad; --line:#ece6d826;
+  --brass:#e2b558; --on-brass:#1d1404; --plate:#1c232c; --plate-2:#0a0d11; --sand:#f6e4b4; --peak:#ece6d8; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0b0e12; --panel:#141920; --ink:#ece6d8; --muted:#9aa3ad; --line:#ece6d826;
+  --brass:#e2b558; --on-brass:#1d1404; --plate:#1c232c; --plate-2:#0a0d11; --sand:#f6e4b4; --peak:#ece6d8; color-scheme:dark }
+
+body{background:var(--bg);color:var(--ink);font-family:var(--ui);font-size:15px;line-height:1.5}
+.wrap{max-width:1120px;margin:0 auto;padding-block:28px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:36px;align-items:start}
+@media (max-width:820px){ .wrap{grid-template-columns:minmax(0,1fr);gap:22px;padding-block:18px 32px} }
+
+.plate{position:relative;aspect-ratio:1;max-width:100%;border-radius:4px;touch-action:none;cursor:crosshair;
+  background:radial-gradient(circle at 50% 50%,var(--plate) 0%,var(--plate-2) 100%);
+  box-shadow:0 30px 60px -30px #000c, inset 0 0 0 1px #ffffff14, inset 0 0 60px #0008}
+.plate canvas{position:absolute;inset:0;width:100%;height:100%;display:block;border-radius:4px}
+.plate::after{content:"";position:absolute;left:50%;top:50%;width:10px;height:10px;translate:-50% -50%;border-radius:50%;background:#0009;box-shadow:inset 0 0 0 1.5px #ffffff30;pointer-events:none}
+.hint{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--muted);margin-top:10px}
+
+.side{display:flex;flex-direction:column;gap:20px;min-width:0}
+h1{font-family:var(--display);font-weight:500;font-size:clamp(34px,5vw,52px);line-height:1;margin:0;letter-spacing:-.01em}
+h1 em{font-style:italic}
+.lede{margin:0;color:var(--muted);max-width:46ch}
+.read{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:16px}
+.hz{font-family:var(--mono);font-weight:500;font-size:clamp(38px,6vw,56px);line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.hz small{font-size:.38em;letter-spacing:.08em;color:var(--muted);margin-left:6px}
+.fig{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.fig b{color:var(--brass);font-weight:500}
+
+.spec{position:relative;height:96px;touch-action:none;cursor:ew-resize}
+.spec canvas{width:100%;height:100%;display:block}
+input[type=range]{width:100%;margin:0;accent-color:var(--brass)}
+.axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.05em}
+label.lab{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px}
+
+.row{display:flex;flex-wrap:wrap;gap:8px}
+button{font:600 14px var(--ui);cursor:pointer;border-radius:3px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:10px 14px}
+button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+button.primary{background:var(--brass);color:var(--on-brass);border-color:transparent}
+button[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--brass)}
+.note{font-size:13.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px;max-width:52ch}
+.note b{color:var(--ink);font-weight:600}
+</style>
+
+<div class="wrap">
+  <div>
+    <div class="plate" id="plate" aria-label="A vibrating square plate covered in sand. Touch it to flick the sand.">
+      <canvas id="cv"></canvas>
+    </div>
+    <div class="hint">Touch the plate to flick the sand. Clamped at the centre, free at the edges.</div>
+  </div>
+
+  <div class="side">
+    <h1>Chladni <em>Plate</em></h1>
+    <p class="lede">Sand on a steel plate, driven by one pure tone. At most pitches it just shivers. At the plate's own resonances it runs to the lines that stay still, and a figure appears.</p>
+
+    <div class="read">
+      <div class="hz"><span id="hz">748</span><small>Hz</small></div>
+      <div class="fig" id="fig">Figure <b>(3,5)</b></div>
+    </div>
+
+    <div>
+      <label class="lab" for="freq">Driving pitch. Peaks are resonances.</label>
+      <div class="spec" id="spec"><canvas id="sp"></canvas></div>
+      <input type="range" id="freq" min="0" max="1000" step="1" value="500" aria-label="Driving frequency">
+      <div class="axis"><span>80 Hz</span><span>440</span><span>2400 Hz</span></div>
+    </div>
+
+    <div class="row">
+      <button class="primary" id="sound" aria-pressed="false">Turn sound on</button>
+      <button id="prev" aria-label="Previous figure">‹ Figure</button>
+      <button id="next" aria-label="Next figure">Figure ›</button>
+      <button id="gliss" aria-pressed="false">Glissando</button>
+      <button id="scatter">Scatter sand</button>
+    </div>
+
+    <p class="note"><b>What you are seeing.</b> Ernst Chladni drew a violin bow along plates like this in 1787. Each figure is a standing wave: the sand is thrown off the parts that move and collects where the plate is still. Higher pitches give finer figures, because the pitch of a plate rises with the square of the number of lines.</p>
+  </div>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const PI = Math.PI, clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const FMIN = 80, FMAX = 2400, K = 22, Q = .016;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* resonances of the idealised square plate: f = K (m² + n²) */
+const modes = [];
+for (let m = 1; m <= 9; m++) for (let n = m + 1; n <= 10; n++){ const f = K * (m * m + n * n); if (f >= FMIN && f <= FMAX) modes.push({ m, n, f }); }
+modes.sort((a, b) => a.f - b.f);
+const peaks = [...new Set(modes.map(o => o.f))];
+const toF = t => FMIN * Math.pow(FMAX / FMIN, t), toT = f => Math.log(f / FMIN) / Math.log(FMAX / FMIN);
+const resp = (F, o) => { const d = (F - o.f) / (o.f * Q); return 1 / (1 + d * d); };
+
+let F = K * 34, active = [], strength = 1, sumA = 1;
+function tune(f){
+  F = clamp(f, FMIN, FMAX); active = []; strength = 0; sumA = 0;
+  for (const o of modes){ const a = resp(F, o); if (a > .03){ active.push({ m: o.m * PI, n: o.n * PI, a, o }); sumA += a; if (a > strength) strength = a; } }
+  $('hz').textContent = Math.round(F);
+  $('freq').value = Math.round(toT(F) * 1000);
+  const top = active.filter(x => x.a > .5).map(x => '(' + x.o.m + ',' + x.o.n + ')');
+  const fig = $('fig'); fig.textContent = '';
+  if (top.length){ fig.append('Figure '); const b = document.createElement('b'); b.textContent = top.join(' + '); fig.append(b); }
+  else fig.textContent = 'Between figures';
+  audio();
+}
+
+/* sand */
+const cv = $('cv'), ctx = cv.getContext('2d'), plate = $('plate');
+let S = 0, img, px, dens;
+const N = innerWidth < 600 ? 18000 : 30000;
+const X = new Float32Array(N), Y = new Float32Array(N);
+for (let i = 0; i < N; i++){ X[i] = Math.random(); Y[i] = Math.random(); }
+let pal = [0, 0, 0, 0];
+function theme(){
+  const c = getComputedStyle(document.documentElement).getPropertyValue('--sand').trim();
+  const r = parseInt(c.slice(1, 3), 16), g = parseInt(c.slice(3, 5), 16), b = parseInt(c.slice(5, 7), 16);
+  pal = [0, 110, 190, 255].map(a => (a << 24 | b << 16 | g << 8 | r) >>> 0);
+  drawSpec();
+}
+function size(){
+  const w = plate.clientWidth; S = Math.round(clamp(w * Math.min(2, devicePixelRatio || 1), 240, 760));
+  cv.width = cv.height = S; img = ctx.createImageData(S, S); px = new Uint32Array(img.data.buffer); dens = new Uint8Array(S * S);
+  sizeSpec();
+}
+function step(){
+  if (!active.length) return;
+  const base = .0006 * strength, gain = .026 * strength / sumA;
+  for (let i = 0; i < N; i++){
+    const x = X[i], y = Y[i]; let v = 0;
+    for (let k = 0; k < active.length; k++){ const o = active[k]; v += o.a * (Math.cos(o.n * x) * Math.cos(o.m * y) - Math.cos(o.m * x) * Math.cos(o.n * y)); }
+    const r = base + gain * Math.abs(v), th = Math.random() * 6.2832;
+    let nx = x + Math.cos(th) * r, ny = y + Math.sin(th) * r;
+    if (nx < 0) nx = -nx; else if (nx > 1) nx = 2 - nx;
+    if (ny < 0) ny = -ny; else if (ny > 1) ny = 2 - ny;
+    X[i] = nx; Y[i] = ny;
+  }
+}
+function render(){
+  dens.fill(0); const m = S - 1;
+  for (let i = 0; i < N; i++){ const j = ((Y[i] * m) | 0) * S + ((X[i] * m) | 0); if (dens[j] < 3) dens[j]++; }
+  for (let j = 0; j < dens.length; j++) px[j] = pal[dens[j]];
+  ctx.putImageData(img, 0, 0);
+}
+function flick(cx, cy, rad){
+  for (let i = 0; i < N; i++){ const dx = X[i] - cx, dy = Y[i] - cy; if (dx * dx + dy * dy < rad * rad){ X[i] = clamp(X[i] + (Math.random() - .5) * .3, 0, 1); Y[i] = clamp(Y[i] + (Math.random() - .5) * .3, 0, 1); } }
+}
+plate.addEventListener('pointerdown', e => { plate.setPointerCapture(e.pointerId); poke(e); });
+plate.addEventListener('pointermove', e => { if (e.buttons || e.pointerType === 'touch') poke(e); });
+function poke(e){ const r = plate.getBoundingClientRect(); flick((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, .07); }
+
+/* response spectrum */
+const sp = $('sp'), sx = sp.getContext('2d'), spec = $('spec');
+let SW = 0, SH = 0, curve = null;
+function sizeSpec(){
+  const d = Math.min(2, devicePixelRatio || 1); SW = spec.clientWidth; SH = spec.clientHeight; sp.width = SW * d; sp.height = SH * d; sx.setTransform(d, 0, 0, d, 0, 0);
+  curve = new Float32Array(Math.max(2, Math.round(SW)));
+  for (let i = 0; i < curve.length; i++){ const f = toF(i / (curve.length - 1)); let a = 0; for (const o of modes) a = Math.max(a, resp(f, o)); curve[i] = a; }
+  drawSpec();
+}
+function drawSpec(){
+  if (!curve) return;
+  const cs = getComputedStyle(document.documentElement), v = n => cs.getPropertyValue(n).trim();
+  sx.clearRect(0, 0, SW, SH);
+  sx.strokeStyle = v('--line'); sx.lineWidth = 1; sx.beginPath(); sx.moveTo(0, SH - .5); sx.lineTo(SW, SH - .5); sx.stroke();
+  sx.beginPath(); sx.moveTo(0, SH);
+  for (let i = 0; i < curve.length; i++) sx.lineTo(i / (curve.length - 1) * SW, SH - 2 - curve[i] * (SH - 14));
+  sx.lineTo(SW, SH); sx.closePath(); sx.globalAlpha = .16; sx.fillStyle = v('--peak'); sx.fill(); sx.globalAlpha = 1;
+  sx.strokeStyle = v('--peak'); sx.lineWidth = 1.2; sx.beginPath();
+  for (let i = 0; i < curve.length; i++){ const x = i / (curve.length - 1) * SW, y = SH - 2 - curve[i] * (SH - 14); i ? sx.lineTo(x, y) : sx.moveTo(x, y); }
+  sx.stroke();
+  const x = toT(F) * SW; sx.strokeStyle = v('--brass'); sx.lineWidth = 2; sx.beginPath(); sx.moveTo(x, 0); sx.lineTo(x, SH); sx.stroke();
+  sx.fillStyle = v('--brass'); sx.beginPath(); sx.arc(x, SH - 2 - strength * (SH - 14), 4, 0, 6.2832); sx.fill();
+}
+function scrub(e){ const r = spec.getBoundingClientRect(); tune(toF(clamp((e.clientX - r.left) / r.width, 0, 1))); stopGliss(); ensureAudio(); }
+spec.addEventListener('pointerdown', e => { spec.setPointerCapture(e.pointerId); scrub(e); });
+spec.addEventListener('pointermove', e => { if (e.buttons || e.pointerType === 'touch') scrub(e); });
+$('freq').addEventListener('input', e => { tune(toF(e.target.value / 1000)); stopGliss(); });
+
+/* sound: one sine at the driving pitch, louder on resonance, as the real plate sings */
+let ac = null, osc = null, gain = null, soundOn = false;
+function ensureAudio(){ if (soundOn && ac && ac.state === 'suspended') ac.resume(); }
+function audio(){
+  if (!ac || !soundOn) return;
+  const t = ac.currentTime; osc.frequency.setTargetAtTime(F, t, .02);
+  gain.gain.setTargetAtTime((.02 + .11 * strength) * Math.min(1, 500 / F + .25), t, .05);
+}
+$('sound').onclick = () => {
+  soundOn = !soundOn;
+  if (soundOn && !ac){
+    try { ac = new (window.AudioContext || window.webkitAudioContext)(); osc = ac.createOscillator(); gain = ac.createGain(); gain.gain.value = 0; osc.type = 'sine'; osc.frequency.value = F; osc.connect(gain).connect(ac.destination); osc.start(); }
+    catch (e){ soundOn = false; $('sound').textContent = 'Sound is not available here'; $('sound').disabled = true; return; }
+  }
+  if (ac){ if (soundOn){ ac.resume(); audio(); } else gain.gain.setTargetAtTime(0, ac.currentTime, .03); }
+  $('sound').textContent = soundOn ? 'Turn sound off' : 'Turn sound on'; $('sound').setAttribute('aria-pressed', soundOn);
+};
+
+/* controls */
+function jump(dir){
+  stopGliss();
+  let i = peaks.findIndex(f => f > F + .5); if (i < 0) i = peaks.length;
+  const at = peaks.includes(Math.round(F)) ? peaks.indexOf(Math.round(F)) : (dir > 0 ? i - 1 : i);
+  tune(peaks[clamp(at + dir, 0, peaks.length - 1)]);
+}
+$('prev').onclick = () => jump(-1); $('next').onclick = () => jump(1);
+let gliss = false, gdir = 1;
+function stopGliss(){ if (gliss){ gliss = false; $('gliss').setAttribute('aria-pressed', false); } }
+$('gliss').onclick = () => { gliss = !gliss; $('gliss').setAttribute('aria-pressed', gliss); };
+$('scatter').onclick = () => { for (let i = 0; i < N; i++){ X[i] = Math.random(); Y[i] = Math.random(); } };
+
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (gliss){
+    let t = toT(F) + gdir * dt * .035 * (1.05 - strength);   // lingers on each resonance
+    if (t >= 1){ t = 1; gdir = -1; } if (t <= 0){ t = 0; gdir = 1; }
+    tune(toF(t));
+  }
+  step(); if (!reduce) step();
+  render(); drawSpec();
+  requestAnimationFrame(frame);
+}
+
+tune(F);
+new ResizeObserver(size).observe(plate); size(); theme();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', theme);
+new MutationObserver(theme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+for (let i = 0; i < 260; i++) step();          // the first frame already shows a settled figure
+requestAnimationFrame(frame);
+})();
+</script>
