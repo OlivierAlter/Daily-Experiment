@@ -1,0 +1,10 @@
+{
+  "title": "The Word Glasshouse",
+  "date": "2026-11-25",
+  "order": 1,
+  "medium": "Canvas 2D, procedural plants",
+  "summary": "Type a word and it grows into a plant. Move across the bed and the wind follows you.",
+  "note": "On claude.ai the page asks Claude for each plant's genome, keeps a shared bed and reads the labels aloud. Here the plants grow from the letters of the word alone.",
+  "author": "Olivier",
+  "source": "https://claude.ai/artifact/6TTS2osFt8gDEaCjDeHZbt"
+}

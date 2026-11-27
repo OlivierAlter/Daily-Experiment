@@ -1,0 +1,10 @@
+{
+  "title": "Suminagashi",
+  "date": "2026-11-27",
+  "order": 1,
+  "medium": "WebGL2 feedback shader",
+  "summary": "Japanese ink marbling. Touch the water to drop ink, drag to comb it, lift a print when it is ready.",
+  "note": "The first piece under \"more artistic\": a tray of water and almost no interface. Washi paper by day, luminous ink at night.",
+  "author": "Olivier",
+  "source": "https://claude.ai/artifact/QaNCLReJg4MvEMrbXZMU2B"
+}

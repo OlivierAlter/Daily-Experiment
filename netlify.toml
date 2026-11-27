@@ -1,0 +1,14 @@
+[build]
+  command = "node build.mjs"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Each piece runs in a sandbox with no access to the gallery's origin,
+# whether it is framed on a gallery page or opened full screen.
+[[headers]]
+  for = "/play/*"
+  [headers.values]
+    Content-Security-Policy = "sandbox allow-scripts allow-downloads allow-pointer-lock allow-modals"
+    X-Robots-Tag = "noindex"

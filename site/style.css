@@ -1,0 +1,76 @@
+/* A gallery wall: neutral paper, one serif for titles, one mono for labels.
+   The pieces bring the colour, so the chrome stays quiet. */
+:root{
+  --bg:#f4f2ee; --ink:#191816; --muted:#6b6862; --line:#19181622; --card:#eae7e1; --accent:#c8432b;
+  --serif:"Instrument Serif","Iowan Old Style",Georgia,serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --gutter:clamp(16px,4vw,56px);
+}
+@media (prefers-color-scheme: dark){ :root{
+  --bg:#121211; --ink:#eceae5; --muted:#99958d; --line:#eceae526; --card:#1d1c1a; --accent:#ee6a4f;
+}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--sans)}
+a{color:inherit;text-underline-offset:3px;text-decoration-thickness:1px}
+a:hover{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+.top,.foot,main{padding-inline:var(--gutter)}
+.top{display:flex;justify-content:space-between;align-items:baseline;gap:16px;padding-block:20px}
+.brand{font:400 1.5rem/1 var(--serif);text-decoration:none}
+.top-note,.foot,.eyebrow,.k,.medium,.byline,.links,.pager,.card-meta,.card-medium,.more{font:400 .75rem/1.5 var(--mono);letter-spacing:.02em}
+.top-note{color:var(--muted);text-align:right}
+
+.eyebrow{display:flex;gap:18px;margin:8px 0 12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.live{color:var(--accent)}
+.live::before{content:"";display:inline-block;width:.55em;height:.55em;border-radius:50%;background:currentColor;margin-right:.6em;animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion: reduce){.live::before{animation:none}}
+
+.stage{position:relative;height:min(76svh,860px);min-height:420px;border:1px solid var(--line);background:var(--card);overflow:hidden}
+.stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+/* On touch screens the piece would swallow page scrolling, so it waits for a tap. */
+.touch{display:none;position:absolute;inset:0;width:100%;border:0;background:transparent;align-items:flex-end;justify-content:center;padding:0 0 18px;cursor:pointer}
+.touch span{background:#191816d9;color:#fff;font:500 .75rem var(--mono);letter-spacing:.1em;text-transform:uppercase;padding:10px 16px;border-radius:99px}
+@media (pointer: coarse){ .touch{display:flex} .stage.on .touch{display:none} }
+
+.label{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:clamp(24px,5vw,72px);padding-block:28px 8px}
+h1{font:400 clamp(2.6rem,6.5vw,5rem)/.95 var(--serif);margin:0 0 14px;letter-spacing:-.01em;text-wrap:balance}
+.medium{color:var(--muted);margin:0 0 16px;text-transform:uppercase;letter-spacing:.08em}
+.summary{margin:0 0 16px;font-size:1.0625rem;max-width:46ch}
+.note{margin:0 0 18px;max-width:46ch;color:var(--muted);font:italic 1.25rem/1.35 var(--serif)}
+.k{display:block;margin:0 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-style:normal}
+.links{display:flex;flex-wrap:wrap;gap:8px 22px;margin:0 0 10px}
+.byline{color:var(--muted);margin:0}
+
+.prompt{border-top:1px solid var(--ink);padding-top:12px;min-width:0}
+.prompt pre{margin:0;font:400 .8125rem/1.65 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;max-height:17.5em;overflow:hidden}
+.prompt pre:not(.open){-webkit-mask-image:linear-gradient(#000 70%,transparent);mask-image:linear-gradient(#000 70%,transparent)}
+.prompt pre.open{max-height:none}
+.more{margin-top:10px;padding:8px 0;background:none;border:0;color:var(--ink);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.more:hover{color:var(--accent)}
+
+.pager{display:flex;justify-content:space-between;gap:16px;margin-top:28px;padding-top:14px;border-top:1px solid var(--line)}
+
+.archive{margin-top:clamp(48px,8vw,96px)}
+.archive h2{font:400 2rem/1 var(--serif);margin:0 0 20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));gap:36px 24px}
+.card{display:flex;flex-direction:column;text-decoration:none}
+.card-img{display:block;aspect-ratio:4/3;background:var(--card);border:1px solid var(--line);overflow:hidden;margin-bottom:12px}
+.card-img img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .6s cubic-bezier(.2,.7,.2,1)}
+.card:hover .card-img img{transform:scale(1.035)}
+@media (prefers-reduced-motion: reduce){.card-img img{transition:none}.card:hover .card-img img{transform:none}}
+.card-blank{display:grid;place-items:center;height:100%;padding:16px;text-align:center;font:italic 1.6rem/1.1 var(--serif);color:var(--muted)}
+.card-meta{display:flex;justify-content:space-between;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.card-title{font:400 1.6rem/1.1 var(--serif);margin-top:4px}
+.card-medium{color:var(--muted);margin-top:4px}
+
+.foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 24px;margin-top:clamp(56px,9vw,112px);padding-block:22px 32px;border-top:1px solid var(--line);color:var(--muted)}
+
+@media (max-width:760px){
+  .top-note{display:none}
+  .stage{height:68svh;min-height:380px;margin-inline:calc(var(--gutter) * -1);border-inline:0}
+  .label{grid-template-columns:1fr;gap:26px}
+}
