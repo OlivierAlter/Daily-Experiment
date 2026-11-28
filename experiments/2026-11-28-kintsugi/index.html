@@ -1,0 +1,256 @@
+<title>Kintsugi</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&display=swap">
+<style>
+/* Layout: one bowl on a cloth, seen from above. A title and two quiet words sit in the lower corners.
+   Light theme is a linen cloth in daylight; dark theme is the same bowl under a single lamp. */
+:root{
+  --cloth:#e8e1d2; --ink:#221d18; --muted:#6a6157; --gold:#b98a2c; --night:0;
+  --display:"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",Georgia,serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --cloth:#0c0b0a; --ink:#ece6da; --muted:#9a9186; --gold:#d9ae4c; --night:1; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --cloth:#0c0b0a; --ink:#ece6da; --muted:#9a9186; --gold:#d9ae4c; --night:1; color-scheme:dark }
+html,body{height:100%}
+body{background:var(--cloth);color:var(--ink);font-family:var(--display);font-size:15px;line-height:1.5;overflow:hidden}
+.table{position:relative;height:100%;overflow:hidden}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:pointer}
+.cap{position:absolute;inset:auto 0 0 0;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;padding-block:0 18px;
+  padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px));pointer-events:none}
+h1{font-size:clamp(22px,3.4vw,30px);font-weight:700;margin:0;letter-spacing:.04em;line-height:1.1}
+h1 span{font-weight:500;font-size:.62em;letter-spacing:.3em;margin-left:.5em;color:var(--muted)}
+.cap p{margin:4px 0 0;color:var(--muted);max-width:32ch;font-size:14px}
+.acts{display:flex;gap:4px;pointer-events:auto;flex-shrink:0}
+button{font:500 15px var(--display);letter-spacing:.04em;color:var(--ink);background:transparent;border:0;border-bottom:1px solid transparent;padding:8px 6px;cursor:pointer}
+button:hover{border-bottom-color:var(--ink)}
+button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.seal{display:inline-block;width:.62em;height:.62em;border-radius:50%;background:var(--gold);margin-right:.45em;vertical-align:.08em}
+</style>
+
+<div class="table" id="table">
+  <canvas id="c" aria-label="A glazed bowl seen from above. Touching it cracks it, and gold lacquer slowly fills the cracks."></canvas>
+  <div class="cap">
+    <div>
+      <h1><i class="seal"></i>Kintsugi<span>金継ぎ</span></h1>
+      <p id="line">Touch the bowl and it breaks. Wait, and gold finds the seams.</p>
+    </div>
+    <div class="acts">
+      <button id="keep" hidden>Keep it</button>
+      <button id="next">Another bowl</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const canvas = $('c'), ctx = canvas.getContext('2d');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const TAU = Math.PI * 2, rand = Math.random;
+const gauss = () => (rand() + rand() + rand() + rand() - 2) * .87;
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+/* glazes: base colour, the deeper colour where glaze pools, the clay that shows at the lip, gloss, hairline colour */
+const GLAZES = [
+  { name: 'celadon', base: [178, 198, 180], deep: [112, 156, 138], clay: [150, 116, 90], gloss: .34, hair: '36,44,38' },
+  { name: 'tenmoku', base: [50, 36, 30], deep: [18, 14, 16], clay: [150, 84, 42], gloss: .6, hair: '214,176,140' },
+  { name: 'shino', base: [238, 228, 210], deep: [224, 204, 180], clay: [188, 112, 68], gloss: .2, hair: '70,48,36' },
+  { name: 'gosu', base: [58, 84, 136], deep: [26, 42, 92], clay: [176, 156, 134], gloss: .42, hair: '14,20,44' },
+];
+let glazeIx = 0, night = 0, W = 0, H = 0, dpr = 1, cx = 0, cy = 0, R = 100;
+let wob = [0, 0, 0], nseed = rand() * 100;
+const rimR = th => 1 + .012 * Math.sin(2 * th + wob[0]) + .008 * Math.sin(3 * th + wob[1]) + .005 * Math.sin(5 * th + wob[2]);
+const rho = (x, y) => Math.hypot(x, y) / rimR(Math.atan2(y, x));
+
+/* value noise for the mottling of the glaze */
+const h2 = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7 + nseed) * 43758.5453; return s - Math.floor(s); };
+function vnoise(x, y){ const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = h2(xi, yi), b = h2(xi + 1, yi), c = h2(xi, yi + 1), d = h2(xi + 1, yi + 1); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; }
+const fbm = (x, y) => vnoise(x, y) * .55 + vnoise(x * 2.1, y * 2.1) * .28 + vnoise(x * 4.3, y * 4.3) * .17;
+
+/* the bowl is shaded once per bowl, pixel by pixel, from a height profile: flat floor, rising wall, rounded lip */
+const pix = document.createElement('canvas'), layer = document.createElement('canvas'), goldLayer = document.createElement('canvas');
+const gctx = goldLayer.getContext('2d');
+const SPAN = 1.03;
+function shadeBowl(){
+  const g = GLAZES[glazeIx], S = Math.min(1100, Math.max(64, Math.ceil(2 * R * dpr * SPAN))); pix.width = pix.height = S;
+  const pc = pix.getContext('2d'), img = pc.createImageData(S, S), d = img.data;
+  let lx = -.45, ly = -.6, lz = .66; const ll = Math.hypot(lx, ly, lz); lx /= ll; ly /= ll; lz /= ll;
+  let hx = lx, hy = ly, hz = lz + 1; const hl = Math.hypot(hx, hy, hz); hx /= hl; hy /= hl; hz /= hl;
+  const amb = night ? .34 : .5, dif = night ? .78 : .62, half = S / 2 / SPAN;
+  for (let j = 0; j < S; j++) for (let i = 0; i < S; i++){
+    const u = ((i + .5) / S * 2 - 1) * SPAN, v = ((j + .5) / S * 2 - 1) * SPAN, r = Math.hypot(u, v), p = r / rimR(Math.atan2(v, u));
+    if (p >= 1.01) continue;
+    const ux = r > 1e-6 ? u / r : 0, uy = r > 1e-6 ? v / r : 0;
+    let s = p < .36 ? .1 * p / .36 : .1 + 1.25 * sstep(.34, .8, p);
+    s += .22 * Math.exp(-((p - .37) * (p - .37)) / .0005);                 // the faint ring where floor meets wall
+    const lip = sstep(.93, 1, p); s = s * (1 - lip) - 1.5 * lip;
+    const nl = Math.hypot(s, 1), nx = -s * ux / nl, ny = -s * uy / nl, nz = 1 / nl;
+    const diff = Math.max(0, nx * lx + ny * ly + nz * lz), spec = Math.pow(Math.max(0, nx * hx + ny * hy + nz * hz), 46) * g.gloss * (night ? 1.25 : 1);
+    const pool = .6 * (1 - sstep(0, .58, p)), edge = sstep(.952, .985, p) * .85, m = .93 + .14 * fbm(u * 3.2 + 7, v * 3.2 + 3);
+    const fleck = h2(i * .37, j * .37) > .9982 ? .72 : 1, ao = .8 + .2 * sstep(0, .9, p), sh = (amb + dif * diff) * ao * m * fleck;
+    const o = (j * S + i) * 4;
+    for (let k = 0; k < 3; k++){ let c = g.base[k] + (g.deep[k] - g.base[k]) * pool; c += (g.clay[k] - c) * edge; d[o + k] = clamp(c * sh + spec * 255, 0, 255); }
+    d[o + 3] = clamp((1 - p) * half + .5, 0, 1) * 255;
+  }
+  pc.putImageData(img, 0, 0);
+}
+function bakeLayer(){
+  const L = Math.ceil(R * dpr * 2 * 1.5); layer.width = layer.height = L; const lc = layer.getContext('2d'), m = L / 2, rr = R * dpr;
+  lc.save(); lc.shadowColor = night ? 'rgba(0,0,0,.85)' : 'rgba(60,40,20,.42)'; lc.shadowBlur = rr * .22; lc.shadowOffsetX = rr * .07; lc.shadowOffsetY = rr * .1;
+  lc.fillStyle = night ? '#000' : '#5a4630'; lc.beginPath(); lc.arc(m, m, rr * .97, 0, TAU); lc.fill(); lc.restore();
+  lc.imageSmoothingQuality = 'high'; lc.drawImage(pix, m - rr * SPAN, m - rr * SPAN, rr * 2 * SPAN, rr * 2 * SPAN);
+}
+
+/* cracks: wandering lines from the point of impact, stopping at the rim or at an older crack */
+const CRACK_SPEED = 7, GOLD_SPEED = reduce ? 40 : .2, GOLD_DELAY = reduce ? .1 : 1.1, MAXPTS = 2600;
+let cracks = [], chips = [], npts = 0, strikes = 0, now = 0;
+function hit(x1, y1, x2, y2, self){
+  let best = null, bt = 2;
+  for (const c of cracks){ if (c === self) continue; const p = c.pts;
+    for (let i = 0; i < p.length - 1; i++){ const x3 = p[i][0], y3 = p[i][1], x4 = p[i + 1][0], y4 = p[i + 1][1];
+      const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4); if (Math.abs(den) < 1e-12) continue;
+      const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den, u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / den;
+      if (t > 1e-4 && t <= 1 && u >= 0 && u <= 1 && t < bt){ bt = t; best = [x1 + t * (x2 - x1), y1 + t * (y2 - y1)]; } } }
+  return best;
+}
+function grow(x, y, ang, depth, born, g0){
+  const c = { pts: [[x, y]], len: [0], w: [], total: 0, born, g0, baked: false }; cracks.push(c);
+  const step = .021, kids = []; let curv = gauss() * .04, n = 0;
+  while (n < 170 && npts < MAXPTS){
+    ang += curv + gauss() * .085; curv = curv * .9 + gauss() * .011;
+    let nx = x + Math.cos(ang) * step, ny = y + Math.sin(ang) * step, end = false;
+    if (rho(nx, ny) >= .99){ let a = 0, b = 1; for (let k = 0; k < 8; k++){ const m = (a + b) / 2; if (rho(x + (nx - x) * m, y + (ny - y) * m) >= .99) b = m; else a = m; } nx = x + (nx - x) * a; ny = y + (ny - y) * a; end = true; }
+    if (n > 2){ const q = hit(x, y, nx, ny, c); if (q){ nx = q[0]; ny = q[1]; end = true; } }
+    c.pts.push([nx, ny]); c.len.push(c.len[c.len.length - 1] + Math.hypot(nx - x, ny - y)); npts++; x = nx; y = ny; n++;
+    if (end) break;
+    if (depth < 2 && n > 4 && rand() < (depth ? .028 : .05)) kids.push([c.pts.length - 1, ang + (rand() < .5 ? -1 : 1) * (.7 + rand() * .7)]);
+  }
+  c.total = c.len[c.len.length - 1]; const ph = rand() * 9;
+  for (let i = 0; i < c.pts.length; i++) c.w.push(.72 + .5 * (.5 + .5 * Math.sin(c.len[i] * 23 + ph)) + .35 * rand() + (i === 0 && depth === 0 ? .5 : 0));
+  for (const [i, a] of kids){ const p = c.pts[i]; grow(p[0], p[1], a, depth + 1, born + c.len[i] / CRACK_SPEED, g0 + c.len[i] / GOLD_SPEED); }
+  return c;
+}
+function strike(x, y){
+  if (npts >= MAXPTS){ $('line').textContent = 'This bowl has been mended enough. Take another.'; return false; }
+  const n = 2 + (rand() * 2.6 | 0), a0 = rand() * TAU, g0 = now + GOLD_DELAY;
+  for (let k = 0; k < n; k++) grow(x, y, a0 + k * TAU / n + gauss() * .32, 0, now, g0);
+  const poly = [], m = 5 + (rand() * 3 | 0), r = .016 + rand() * .016, a1 = rand() * TAU;
+  for (let k = 0; k < m; k++){ const a = a1 + k * TAU / m, q = r * (.6 + rand() * .7); poly.push([x + Math.cos(a) * q, y + Math.sin(a) * q]); }
+  chips.push({ poly, born: now, g0 }); strikes++; return true;
+}
+
+/* drawing */
+const GOLD = { shade: 'rgba(40,22,2,.5)', base: '#9a6b18', body: '#d2a23a', light: '255,244,196' };
+const X = x => (cx + x * R) * dpr, Y = y => (cy + y * R) * dpr;
+function goldSeg(c2d, c, i, ex, ey, pass){
+  const p = c.pts[i], w = Math.max(1.5, R * .0125) * dpr * (c.w[i] + c.w[i + 1]) / 2;
+  c2d.beginPath();
+  if (pass === 0){ c2d.moveTo(X(p[0]) + w * .28, Y(p[1]) + w * .36); c2d.lineTo(X(ex) + w * .28, Y(ey) + w * .36); c2d.lineWidth = w * 1.25; c2d.strokeStyle = GOLD.shade; }
+  else { c2d.moveTo(X(p[0]), Y(p[1])); c2d.lineTo(X(ex), Y(ey)); c2d.lineWidth = pass === 1 ? w : w * .62; c2d.strokeStyle = pass === 1 ? GOLD.base : GOLD.body; }
+  c2d.stroke();
+}
+function goldRun(c2d, c, Lg){
+  for (let pass = 0; pass < 3; pass++) for (let i = 0; i < c.pts.length - 1; i++){
+    if (c.len[i] >= Lg) break; let q = c.pts[i + 1];
+    if (c.len[i + 1] > Lg){ const t = (Lg - c.len[i]) / (c.len[i + 1] - c.len[i]), p = c.pts[i]; q = [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]; }
+    goldSeg(c2d, c, i, q[0], q[1], pass);
+  }
+}
+let phi = -2.2, phiTarget = null, lastMove = -99, bgGrad = null, grain = null;
+function makeGrain(){ const g = document.createElement('canvas'); g.width = g.height = 160; const gc = g.getContext('2d'), im = gc.createImageData(160, 160);
+  for (let i = 0; i < im.data.length; i += 4){ const v = rand() * 255; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 14 + (((i / 4) % 160) % 3 === 0 ? 10 : 0) + (((i / 640) | 0) % 3 === 0 ? 10 : 0); }
+  gc.putImageData(im, 0, 0); grain = ctx.createPattern(g, 'repeat'); }
+function paint(){
+  const w = canvas.width, h = canvas.height, g = GLAZES[glazeIx];
+  ctx.globalAlpha = 1; ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, w, h);
+  ctx.globalAlpha = night ? .35 : .5; ctx.fillStyle = grain; ctx.fillRect(0, 0, w, h); ctx.globalAlpha = 1;
+  ctx.drawImage(layer, cx * dpr - layer.width / 2, cy * dpr - layer.height / 2);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  /* open cracks, not yet reached by the gold */
+  for (const c of cracks){ const Lc = clamp((now - c.born) * CRACK_SPEED, 0, c.total), Lg = clamp((now - c.g0) * GOLD_SPEED, 0, c.total); if (Lc <= Lg || Lc <= 0) continue;
+    for (let pass = 0; pass < 2; pass++){ ctx.beginPath(); let started = false; const off = pass ? .9 * dpr : 0;
+      for (let i = 0; i < c.pts.length; i++){ if (c.len[i] > Lc) break; if (c.len[i] < Lg - .03) continue; const px = X(c.pts[i][0]) + off, py = Y(c.pts[i][1]) + off; started ? ctx.lineTo(px, py) : ctx.moveTo(px, py); started = true; }
+      ctx.lineWidth = (pass ? .8 : 1.25) * dpr; ctx.strokeStyle = pass ? 'rgba(255,255,255,.2)' : `rgba(${g.hair},.82)`; ctx.stroke(); } }
+  for (const ch of chips){ const a = clamp((now - ch.g0) / 1.6, 0, 1); ctx.beginPath(); ch.poly.forEach((p, i) => i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))); ctx.closePath();
+    ctx.fillStyle = `rgb(${g.clay.map(v => v * .55 | 0).join(',')})`; ctx.fill(); if (a > 0){ ctx.globalAlpha = a; ctx.fillStyle = GOLD.body; ctx.fill(); ctx.lineWidth = 1.4 * dpr; ctx.strokeStyle = GOLD.base; ctx.stroke(); ctx.globalAlpha = 1; } }
+  /* gold: finished seams are baked once, flowing seams are drawn live with a wet bead at the tip */
+  for (const c of cracks){ if (c.baked) continue; const Lg = clamp((now - c.g0) * GOLD_SPEED, 0, c.total); if (Lg >= c.total && c.total > 0){ goldRun(gctx, c, c.total); c.baked = true; } }
+  ctx.drawImage(goldLayer, 0, 0);
+  for (const c of cracks){ if (c.baked) continue; const Lg = clamp((now - c.g0) * GOLD_SPEED, 0, c.total); if (Lg <= 0) continue; goldRun(ctx, c, Lg);
+    let i = 0; while (i < c.len.length - 2 && c.len[i + 1] < Lg) i++; const t = clamp((Lg - c.len[i]) / (c.len[i + 1] - c.len[i] || 1), 0, 1), p = c.pts[i], q = c.pts[i + 1], bx = X(p[0] + (q[0] - p[0]) * t), by = Y(p[1] + (q[1] - p[1]) * t), br = Math.max(1.5, R * .0125) * dpr * 1.05;
+    ctx.beginPath(); ctx.arc(bx, by, br, 0, TAU); ctx.fillStyle = GOLD.body; ctx.fill(); ctx.beginPath(); ctx.arc(bx - br * .3, by - br * .35, br * .38, 0, TAU); ctx.fillStyle = `rgba(${GOLD.light},.95)`; ctx.fill(); }
+  /* the light on the gold: seams that lie across the light catch it, and a slow sheen travels along them */
+  const boost = night ? 1 : .85;
+  for (const c of cracks){ const Lg = c.baked ? c.total : clamp((now - c.g0) * GOLD_SPEED, 0, c.total); if (Lg <= 0) continue;
+    for (let i = 0; i < c.pts.length - 1; i++){ if (c.len[i + 1] > Lg) break; const p = c.pts[i], q = c.pts[i + 1], a = Math.atan2(q[1] - p[1], q[0] - p[0]);
+      const gl = Math.pow(Math.abs(Math.sin(a - phi)), 3), sheen = .5 + .5 * Math.sin(c.len[i] * 8 - now * 1.1 + c.g0), al = (.1 + .9 * gl) * (.45 + .55 * sheen) * boost; if (al < .06) continue;
+      const w = Math.max(1.5, R * .0125) * dpr * (c.w[i] + c.w[i + 1]) / 2, ox = -w * .16, oy = -w * .2;
+      ctx.beginPath(); ctx.moveTo(X(p[0]) + ox, Y(p[1]) + oy); ctx.lineTo(X(q[0]) + ox, Y(q[1]) + oy); ctx.lineWidth = w * .3; ctx.strokeStyle = `rgba(${GOLD.light},${al.toFixed(2)})`; ctx.stroke(); } }
+}
+
+/* sound: a struck bowl. Each break shortens the ring. */
+let ac = null;
+function tink(){
+  try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume();
+    const t = ac.currentTime, out = ac.createGain(); out.gain.value = .22; out.connect(ac.destination);
+    const f0 = 760 + glazeIx * 95 + (wob[0] % 1) * 60, dull = Math.pow(.86, strikes);
+    [[1, .5, 1.5], [2.32, .3, 1], [3.87, .16, .55], [5.61, .08, .3]].forEach(([m, g, dec]) => { const o = ac.createOscillator(), a = ac.createGain(); o.frequency.value = f0 * m * (1 - strikes * .004);
+      a.gain.setValueAtTime(g, t); a.gain.exponentialRampToValueAtTime(.0005, t + Math.max(.08, dec * dull)); o.connect(a).connect(out); o.start(t); o.stop(t + 1.7); });
+    const len = ac.sampleRate * .06 | 0, buf = ac.createBuffer(1, len, ac.sampleRate), ch = buf.getChannelData(0); for (let i = 0; i < len; i++) ch[i] = (rand() * 2 - 1) * Math.pow(1 - i / len, 3);
+    const src = ac.createBufferSource(), hp = ac.createBiquadFilter(), ng = ac.createGain(); src.buffer = buf; hp.type = 'highpass'; hp.frequency.value = 2400; ng.gain.value = .7; src.connect(hp).connect(ng).connect(out); src.start(t);
+  } catch (e){}
+}
+
+function newBowl(first){
+  if (!first) glazeIx = (glazeIx + 1) % GLAZES.length;
+  wob = [rand() * TAU, rand() * TAU, rand() * TAU]; nseed = rand() * 100; cracks = []; chips = []; npts = 0; strikes = 0;
+  gctx.clearRect(0, 0, goldLayer.width, goldLayer.height); shadeBowl(); bakeLayer();
+  $('line').textContent = 'Touch the bowl and it breaks. Wait, and gold finds the seams.';
+}
+function theme(){ const n = +getComputedStyle(document.documentElement).getPropertyValue('--night') || 0; if (n !== night){ night = n; if (W){ shadeBowl(); layout(true); } } }
+function layout(force){
+  const r = $('table').getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1); if (!force && r.width === W && r.height === H && d === dpr) return;
+  const oldR = R; W = r.width; H = r.height; dpr = d; canvas.width = Math.max(2, Math.round(W * dpr)); canvas.height = Math.max(2, Math.round(H * dpr));
+  R = Math.max(40, Math.min(W * .42, (H - 110) * .43)); cx = W / 2; cy = Math.max(R * 1.12, (H - 96) * .5);
+  goldLayer.width = canvas.width; goldLayer.height = canvas.height; cracks.forEach(c => { c.baked = false; });
+  bgGrad = ctx.createRadialGradient(cx * dpr - R * dpr * .5, cy * dpr - R * dpr * .7, R * dpr * .2, cx * dpr, cy * dpr, Math.hypot(W, H) * dpr * .62);
+  if (night){ bgGrad.addColorStop(0, '#3a2c1f'); bgGrad.addColorStop(.42, '#17120e'); bgGrad.addColorStop(1, '#070605'); }
+  else { bgGrad.addColorStop(0, '#f3ede0'); bgGrad.addColorStop(.6, '#e6dece'); bgGrad.addColorStop(1, '#d3c9b6'); }
+  if (!grain) makeGrain();
+  if (force || Math.abs(oldR - R) > .5 || !pix.width || pix.width < 65) shadeBowl();
+  bakeLayer();
+}
+
+const local = e => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left - cx) / R, (e.clientY - r.top - cy) / R]; };
+let touched = false;
+canvas.addEventListener('pointerdown', e => { const [x, y] = local(e); if (rho(x, y) < .95){ touched = true; if (strike(x, y)) tink(); } });
+canvas.addEventListener('pointermove', e => { const [x, y] = local(e); phiTarget = Math.atan2(y, x); lastMove = now; });
+$('next').onclick = () => { touched = true; newBowl(false); };
+
+const use = n => (window.claude && window.claude.use) ? window.claude.use(n).catch(() => null) : Promise.resolve(null);
+use('downloads').then(dl => { if (!dl) return; const b = $('keep'); b.hidden = false;
+  b.onclick = () => { paint(); canvas.toBlob(async blob => { if (!blob) return; b.disabled = true;
+      try { await dl.save({ filename: 'kintsugi-' + GLAZES[glazeIx].name + '.png', data: blob }); b.textContent = 'Kept'; } catch (e){ b.textContent = e && e.code === 'declined' ? 'Keep it' : 'It slipped. Again?'; }
+      b.disabled = false; setTimeout(() => { b.textContent = 'Keep it'; }, 4000); }, 'image/png'); }; });
+
+let t0 = null, opened = false;
+function frame(ts){
+  if (t0 === null) t0 = ts; now = (ts - t0) / 1000;
+  const target = (phiTarget !== null && now - lastMove < 4) ? phiTarget + Math.PI / 2 : -2.2 + now * .22;
+  let dphi = ((target - phi + Math.PI) % TAU + TAU) % TAU - Math.PI; phi += dphi * .05;
+  if (!opened && now > .7){ opened = true; if (!touched) strike(.2 + gauss() * .05, -.14 + gauss() * .05); }
+  paint(); requestAnimationFrame(frame);
+}
+
+night = +getComputedStyle(document.documentElement).getPropertyValue('--night') || 0;
+layout(true); newBowl(true);
+new ResizeObserver(() => layout(false)).observe($('table'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', theme);
+new MutationObserver(theme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+window.__kin = () => ({ cracks: cracks.length, npts, strikes, glaze: GLAZES[glazeIx].name, baked: cracks.filter(c => c.baked).length });
+requestAnimationFrame(frame);
+})();
+</script>
